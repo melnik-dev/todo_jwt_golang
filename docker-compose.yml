@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  api:
+    build: ./
+    container_name: api
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=qwerty
+      - JWT_SECRET=jwt_secret
+    depends_on:
+      - db
+
+  db:
+    image: postgres:17.4
+    container_name: db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations/init.up.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_DB: todo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: qwerty
+
+volumes:
+  pgdata:

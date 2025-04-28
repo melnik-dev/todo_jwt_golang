@@ -1,0 +1,14 @@
+http:
+  port: "8080"
+  readTimeout: "10s"
+  writeTimeout: "10s"
+  idleTimeout: "60s"
+db:
+  username: "postgres"
+  host: "localhost"
+  port: "5432"
+  dbname: "todo"
+  sslmode: "disable"
+  password: ""
+jwt:
+  secret: ""
