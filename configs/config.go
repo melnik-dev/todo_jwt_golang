@@ -12,6 +12,7 @@ import (
 type Config struct {
 	HTTP struct {
 		Port         string        `mapstructure:"port"`
+		Host         string        `mapstructure:"host"`
 		ReadTimeout  time.Duration `mapstructure:"readTimeout"`
 		WriteTimeout time.Duration `mapstructure:"writeTimeout"`
 		IdleTimeout  time.Duration `mapstructure:"idleTimeout"`
@@ -25,7 +26,8 @@ type Config struct {
 		Password string `mapstructure:"password"` // не читаем из файла
 	} `mapstructure:"db"`
 	JWT struct {
-		Secret string `mapstructure:"secret"`
+		Secret   string        `mapstructure:"secret"`
+		TokenTTL time.Duration `mapstructure:"tokenTTL"`
 	} `mapstructure:"jwt"`
 }
 
@@ -44,6 +46,9 @@ func LoadConfig() (*Config, error) {
 
 	//viper.AutomaticEnv() // HTTP_PORT == http.port
 	//viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	if err := viper.BindEnv("http.host", "HTTP_HOST"); err != nil {
+		return nil, fmt.Errorf("failed binding HTTP_HOST: %w", err)
+	}
 	if err := viper.BindEnv("db.host", "DB_HOST"); err != nil {
 		return nil, fmt.Errorf("failed binding DB_HOST: %w", err)
 	}
@@ -59,6 +64,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	if cfg.HTTP.Host == "" {
+		return nil, errors.New("HTTP_HOST environment variable not set")
+	}
 	if cfg.DB.Host == "" {
 		return nil, errors.New("DB_HOST environment variable not set")
 	}
@@ -68,6 +76,7 @@ func LoadConfig() (*Config, error) {
 	if cfg.JWT.Secret == "" {
 		return nil, errors.New("JWT_SECRET environment variable not set")
 	}
+	cfg.JWT.TokenTTL = time.Hour
 
 	fmt.Println(cfg)
 	return &cfg, nil

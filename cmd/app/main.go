@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/melnik-dev/go_todo_jwt/configs"
-	"github.com/melnik-dev/go_todo_jwt/internal/db"
-	"github.com/melnik-dev/go_todo_jwt/internal/handler"
-	"github.com/melnik-dev/go_todo_jwt/internal/repository"
-	"github.com/melnik-dev/go_todo_jwt/internal/router"
-	"github.com/melnik-dev/go_todo_jwt/internal/service"
+	"github.com/melnik-dev/go_todo_jwt/internal/auth"
+	"github.com/melnik-dev/go_todo_jwt/internal/task"
+	"github.com/melnik-dev/go_todo_jwt/internal/user"
+	"github.com/melnik-dev/go_todo_jwt/pkg/db"
 	"log"
 	"net/http"
 	"os"
@@ -36,13 +36,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error connecting to database, %s", err)
 	}
+	route := gin.Default()
+	route.GET("/ping", ping)
 
-	repo := repository.NewRepository(pgDB)
-	services := service.NewService(repo, cfg.JWT.Secret, time.Hour)
-	handlers := handler.NewHandler(services)
-	route := router.NewRouter(handlers, cfg.JWT.Secret)
+	// Repositories
+	userRepo := user.NewRepository(pgDB)
+	taskRepo := task.NewRepository(pgDB)
+	// Services
+	authService := auth.NewService(userRepo)
+	taskService := task.NewService(taskRepo)
+	// Handler
+	auth.NewHandler(route, auth.HandlerDeps{
+		AuthService: authService,
+		Config:      cfg,
+	})
+	task.NewHandler(route, task.HandlerDeps{
+		TaskService: taskService,
+		Config:      cfg,
+	})
 
-	serverAddress := fmt.Sprintf(":%s", cfg.HTTP.Port)
+	serverAddress := fmt.Sprintf("%s:%s", cfg.HTTP.Host, cfg.HTTP.Port)
 	srv := &http.Server{
 		Addr:           serverAddress,
 		Handler:        route,
@@ -77,4 +90,10 @@ func main() {
 	}
 
 	log.Println("Server stopped")
+}
+
+func ping(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message": "pong",
+	})
 }
