@@ -2,10 +2,13 @@ package task
 
 import (
 	"errors"
+	"log"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/melnik-dev/go_todo_jwt/configs"
 	"github.com/melnik-dev/go_todo_jwt/pkg/middleware"
-	"net/http"
+	"github.com/melnik-dev/go_todo_jwt/pkg/response"
 )
 
 type HandlerDeps struct {
@@ -40,20 +43,19 @@ func (h *Handler) Create(c *gin.Context) {
 
 	var input CreateRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"err": http.StatusText(http.StatusBadRequest)})
+		log.Printf("Failed to bind JSON in Create task: %v", err)
+		response.BadRequest(c, "Invalid input data")
 		return
 	}
 
 	taskId, err := h.TaskService.Create(userID, input.Title, input.Description)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"err": "failed  to create task"})
+		log.Printf("Failed to create task for user %d: %v", userID, err)
+		response.InternalServerError(c, "Failed to create task")
 		return
 	}
 
-	data := CreateResponse{
-		ID: taskId,
-	}
-	c.JSON(http.StatusOK, data)
+	response.Success(c, http.StatusOK, CreateResponse{ID: taskId})
 }
 
 func (h *Handler) Update(c *gin.Context) {
@@ -64,27 +66,30 @@ func (h *Handler) Update(c *gin.Context) {
 
 	var uri URIParam
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"err": http.StatusText(http.StatusBadRequest)})
+		log.Printf("Failed to bind URI in Update task: %v", err)
+		response.BadRequest(c, "Invalid task ID")
 		return
 	}
 
 	var input UpdateRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"err": http.StatusText(http.StatusBadRequest)})
+		log.Printf("Failed to bind JSON in Update task: %v", err)
+		response.BadRequest(c, "Invalid input data")
 		return
 	}
 
 	err := h.TaskService.Update(userID, uri.ID, input.Title, input.Description, input.Completed)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"err": ErrTaskNotFound.Error()})
+			response.NotFound(c, ErrTaskNotFound.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"err": ErrFailedGetTask.Error()})
+		log.Printf("Failed to update task %d for user %d: %v", uri.ID, userID, err)
+		response.InternalServerError(c, "Failed to update task")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"msg": "task updated"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Task updated successfully"})
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -95,21 +100,23 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	var uri URIParam
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"err": http.StatusText(http.StatusBadRequest)})
+		log.Printf("Failed to bind URI in Delete task: %v", err)
+		response.BadRequest(c, "Invalid task ID")
 		return
 	}
 
 	err := h.TaskService.Delete(userID, uri.ID)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"err": ErrTaskNotFound.Error()})
+			response.NotFound(c, ErrTaskNotFound.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"err": ErrFailedGetTask.Error()})
+		log.Printf("Failed to delete task %d for user %d: %v", uri.ID, userID, err)
+		response.InternalServerError(c, "Failed to delete task")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"msg": "task deleted"})
+	response.Success(c, http.StatusOK, gin.H{"message": "Task deleted successfully"})
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -120,21 +127,23 @@ func (h *Handler) Get(c *gin.Context) {
 
 	var uri URIParam
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"err": http.StatusText(http.StatusBadRequest)})
+		log.Printf("Failed to bind URI in Get task: %v", err)
+		response.BadRequest(c, "Invalid task ID")
 		return
 	}
 
 	task, err := h.TaskService.GetById(userID, uri.ID)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"err": ErrTaskNotFound.Error()})
+			response.NotFound(c, ErrTaskNotFound.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"err": ErrFailedGetTask.Error()})
+		log.Printf("Failed to get task %d for user %d: %v", uri.ID, userID, err)
+		response.InternalServerError(c, "Failed to get task")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"task": task})
+	response.Success(c, http.StatusOK, gin.H{"task": task})
 }
 
 func (h *Handler) GetAll(c *gin.Context) {
@@ -145,22 +154,25 @@ func (h *Handler) GetAll(c *gin.Context) {
 
 	tasks, err := h.TaskService.GetAll(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"err": ErrFailedGetTask.Error()})
+		log.Printf("Failed to get all tasks for user %d: %v", userID, err)
+		response.InternalServerError(c, "Failed to get tasks")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
+	response.Success(c, http.StatusOK, gin.H{"tasks": tasks})
 }
 
 func getUserID(c *gin.Context) (int, bool) {
 	strId, ok := c.Get("user_id")
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"err": ErrUserNotFound})
+		log.Printf("User ID not found in context")
+		response.InternalServerError(c, ErrUserNotFound.Error())
 		return 0, false
 	}
 	userID, ok := strId.(int)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user_id type"})
+		log.Printf("Invalid user_id type in context")
+		response.InternalServerError(c, "Invalid user ID type")
 		return 0, false
 	}
 	return userID, true

@@ -1,8 +1,8 @@
 package auth
 
 type RegisterRequest struct {
-	Name     string `json:"username" binding:"required,min=3"`
-	Password string `json:"password" binding:"required,min=3"`
+	Name     string `json:"username" binding:"required,min=3,max=50,alphanum"`
+	Password string `json:"password" binding:"required,min=6,max=50"`
 }
 
 type RegisterResponse struct {
@@ -10,8 +10,8 @@ type RegisterResponse struct {
 }
 
 type LoginRequest struct {
-	Name     string `json:"username" binding:"required,min=3"`
-	Password string `json:"password" binding:"required,min=3"`
+	Name     string `json:"username" binding:"required,min=3,max=50,alphanum"`
+	Password string `json:"password" binding:"required,min=6,max=50"`
 }
 
 type LoginResponse struct {
