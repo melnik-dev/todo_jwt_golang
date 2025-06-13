@@ -3,7 +3,7 @@ package auth
 import (
 	"fmt"
 	"github.com/melnik-dev/go_todo_jwt/internal/user"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/melnik-dev/go_todo_jwt/pkg/crypto"
 )
 
 type Service struct {
@@ -22,7 +22,7 @@ func (service *Service) Register(username, password string) (int, error) {
 		return 0, ErrUserExists
 	}
 
-	hashPassword, err := service.HashPassword(password)
+	hashPassword, err := crypto.HashPassword(password)
 	if err != nil {
 		return 0, fmt.Errorf("service: failed to hash password: %w", err)
 	}
@@ -45,19 +45,9 @@ func (service *Service) Login(username, password string) (int, error) {
 		return 0, ErrInvalidLogin
 	}
 
-	if !service.ComparePasswords(password, existedUser.Password) {
+	if !crypto.ComparePasswords(password, existedUser.Password) {
 		return 0, ErrInvalidLogin
 	}
 
 	return existedUser.ID, nil
-}
-
-func (service *Service) HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
-}
-
-func (service *Service) ComparePasswords(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
 }
