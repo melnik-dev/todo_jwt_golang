@@ -2,6 +2,8 @@ package task
 
 import (
 	"github.com/melnik-dev/go_todo_jwt/internal/user"
+	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
+	"github.com/sirupsen/logrus"
 )
 
 type Service struct {
@@ -12,21 +14,34 @@ func NewService(repo *Repository) *Service {
 	return &Service{taskRepo: repo}
 }
 
-func (service *Service) Create(userID int, title, desc string) (int, error) {
+func (s *Service) Create(userID int, title, desc string) (int, error) {
+	logServ := serviceLogger().WithFields(logrus.Fields{
+		"user_id": userID,
+	})
+	logServ.Debug("Attempting to Create")
+
 	task := &Task{
 		UserID:      userID,
 		Title:       title,
 		Description: desc,
 	}
-	_, err := service.taskRepo.Create(task)
+	_, err := s.taskRepo.Create(task)
 	if err != nil {
+		logServ.WithError(err).Error("Failed to Create")
 		return 0, err
 	}
 
+	logServ.Debug("Create successfully")
 	return task.ID, nil
 }
 
-func (service *Service) Update(userID, taskID int, title, desc string, completed bool) error {
+func (s *Service) Update(userID, taskID int, title, desc string, completed bool) error {
+	logServ := serviceLogger().WithFields(logrus.Fields{
+		"user_id": userID,
+		"task_id": taskID,
+	})
+	logServ.Debug("Attempting to Create")
+
 	task := &Task{
 		ID:          taskID,
 		UserID:      userID,
@@ -34,49 +49,78 @@ func (service *Service) Update(userID, taskID int, title, desc string, completed
 		Description: desc,
 		Completed:   completed,
 	}
-	err := service.taskRepo.Update(task)
+	err := s.taskRepo.Update(task)
 	if err != nil {
+		logServ.WithError(err).Error("Failed to Update")
 		return err
 	}
 
+	logServ.Debug("Update successfully")
 	return nil
 }
 
-func (service *Service) Delete(userID, taskIdD int) error {
+func (s *Service) Delete(userID, taskID int) error {
+	logServ := serviceLogger().WithFields(logrus.Fields{
+		"user_id": userID,
+		"task_id": taskID,
+	})
+	logServ.Debug("Attempting to Delete")
+
 	task := &Task{
-		ID:     taskIdD,
+		ID:     taskID,
 		UserID: userID,
 	}
 
-	err := service.taskRepo.DeleteById(task)
+	err := s.taskRepo.DeleteById(task)
 	if err != nil {
+		logServ.WithError(err).Error("Failed to Delete")
 		return err
 	}
 
+	logServ.Debug("Delete successfully")
 	return nil
 }
 
-func (service *Service) GetById(userID, taskIdD int) (*Task, error) {
+func (s *Service) GetById(userID, taskID int) (*Task, error) {
+	logServ := serviceLogger().WithFields(logrus.Fields{
+		"user_id": userID,
+		"task_id": taskID,
+	})
+	logServ.Debug("Attempting to Delete")
+
 	task := &Task{
-		ID:     taskIdD,
+		ID:     taskID,
 		UserID: userID,
 	}
 
-	_, err := service.taskRepo.GetById(task)
+	_, err := s.taskRepo.GetById(task)
 	if err != nil {
+		logServ.WithError(err).Error("Failed to GetById")
 		return nil, err
 	}
 
+	logServ.Debug("GetById successfully")
 	return task, nil
 }
 
-func (service *Service) GetAll(userID int) ([]Task, error) {
+func (s *Service) GetAll(userID int) ([]Task, error) {
+	logServ := serviceLogger().WithFields(logrus.Fields{
+		"user_id": userID,
+	})
+	logServ.Debug("Attempting to GetAll")
+
 	us := &user.User{ID: userID}
 
-	tasks, err := service.taskRepo.GetAll(us)
+	tasks, err := s.taskRepo.GetAll(us)
 	if err != nil {
+		logServ.WithError(err).Error("Failed to GetAll")
 		return nil, err
 	}
 
+	logServ.Debug("GetAll successfully")
 	return tasks, nil
+}
+
+func serviceLogger() *logrus.Entry {
+	return logger.GetLogger().WithField("layer", "Service task layer")
 }

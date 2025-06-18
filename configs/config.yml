@@ -13,3 +13,16 @@ db:
   password: ""
 jwt:
   secret: ""
+log:
+  # Уровень логирования: debug, info, warn, error, fatal, panic
+  # Для продакшена обычно info или warn
+  level: "debug"
+  # Формат логирования: json (для Loki), text (для консоли)
+  format: "text"
+  # Вывод логирования: stdout (для Promtail/Loki), file
+  output: "stdout"
+  # Путь к файлу логов, если output: "file" для stdout пустыой.
+  filePath: "" # "logs/app.log"
+  # Количество фреймов вызова для пропуска, чтобы Logrus показывал правильное место вызова
+  # обычно 0, 1 или 2 если своя обертка над логгером
+  callerSkip: 0

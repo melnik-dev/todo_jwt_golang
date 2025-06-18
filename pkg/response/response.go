@@ -27,6 +27,13 @@ func Error(c *gin.Context, status int, message string) {
 	})
 }
 
+func AbortWithStatus(c *gin.Context, status int, message string) {
+	c.AbortWithStatusJSON(status, Response{
+		Status: status,
+		Error:  message,
+	})
+}
+
 func BadRequest(c *gin.Context, message string) {
 	Error(c, http.StatusBadRequest, message)
 }

@@ -1,36 +1,53 @@
 package user
 
 import (
-	"github.com/jmoiron/sqlx"
+	"github.com/melnik-dev/go_todo_jwt/pkg/db"
+	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
+	"github.com/sirupsen/logrus"
 )
 
 type Repository struct {
-	db *sqlx.DB
+	db *db.Db
 }
 
-func NewRepository(db *sqlx.DB) *Repository {
+func NewRepository(db *db.Db) *Repository {
 	return &Repository{db: db}
 }
 
-func (repo *Repository) Create(user *User) (*User, error) {
+func (r *Repository) Create(user *User) (*User, error) {
+	userLogger := repositoryLogger()
+	userLogger.Debug("Attempting to Create user")
+
 	var id int
 	query := `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`
 
-	row := repo.db.QueryRow(query, user.Name, user.Password)
+	row := r.db.QueryRow(query, user.Name, user.Password)
 	if err := row.Scan(&id); err != nil {
+		userLogger.WithError(err).Error("Failed to create user in database")
 		return user, err
 	}
+
+	userLogger.WithField("user_id", user.ID).Debug("User Create successfully")
 	return user, nil
 }
 
-func (repo *Repository) Get(username string) (*User, error) {
+func (r *Repository) Get(username string) (*User, error) {
+	userLogger := repositoryLogger()
+	userLogger.Debug("Attempting to Get user")
+
 	var user User
 	query := `SELECT * FROM users WHERE username = $1`
 
-	err := repo.db.Get(&user, query, username)
+	err := r.db.Get(&user, query, username)
 	if err != nil {
+		userLogger.WithError(err).Error("Failed to get user in database")
 		return nil, err
 	}
 
+	userLogger.WithField("user_id", user.ID).Debug("User Get successfully")
 	return &user, nil
+}
+
+func repositoryLogger() *logrus.Entry {
+	return logger.GetLogger().WithField("layer", "Repository user layer")
 }

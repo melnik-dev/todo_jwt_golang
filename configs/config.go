@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
 	"github.com/spf13/viper"
 	"os"
 	"time"
@@ -29,6 +30,7 @@ type Config struct {
 		Secret   string        `mapstructure:"secret"`
 		TokenTTL time.Duration `mapstructure:"tokenTTL"`
 	} `mapstructure:"jwt"`
+	Log logger.Config `mapstructure:"log"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -63,7 +65,7 @@ func LoadConfig() (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
+	fmt.Printf("Log config: %+v\n", cfg.Log)
 	if cfg.HTTP.Host == "" {
 		return nil, errors.New("HTTP_HOST environment variable not set")
 	}
@@ -78,6 +80,5 @@ func LoadConfig() (*Config, error) {
 	}
 	cfg.JWT.TokenTTL = time.Hour
 
-	fmt.Println(cfg)
 	return &cfg, nil
 }

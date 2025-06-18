@@ -4,50 +4,67 @@ import (
 	"fmt"
 	"github.com/melnik-dev/go_todo_jwt/internal/user"
 	"github.com/melnik-dev/go_todo_jwt/pkg/crypto"
+	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
+	"github.com/sirupsen/logrus"
 )
 
 type Service struct {
-	UserRepo *user.Repository
+	userRepo *user.Repository
 }
 
 func NewService(repo *user.Repository) *Service {
-	return &Service{
-		UserRepo: repo,
-	}
+	return &Service{userRepo: repo}
 }
 
-func (service *Service) Register(username, password string) (int, error) {
-	existedUser, _ := service.UserRepo.Get(username)
+func (s *Service) Register(username, password string) (int, error) {
+	logServ := serviceLogger().WithField("user_name", username)
+	logServ.Debug("Attempting to Register new user")
+
+	existedUser, _ := s.userRepo.Get(username)
 	if existedUser != nil {
+		logServ.Warn(ErrUserExists.Error())
 		return 0, ErrUserExists
 	}
 
 	hashPassword, err := crypto.HashPassword(password)
 	if err != nil {
-		return 0, fmt.Errorf("service: failed to hash password: %w", err)
+		logServ.WithError(err).Error("failed to hash password")
+		return 0, fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	u := &user.User{
 		Name:     username,
 		Password: hashPassword,
 	}
-	_, err = service.UserRepo.Create(u)
+	_, err = s.userRepo.Create(u)
 	if err != nil {
+		logServ.WithError(err).Error("failed to hash password")
 		return 0, err
 	}
 
+	logServ.Debug("User Register successfully")
 	return u.ID, nil
 }
 
-func (service *Service) Login(username, password string) (int, error) {
-	existedUser, _ := service.UserRepo.Get(username)
+func (s *Service) Login(username, password string) (int, error) {
+	logServ := serviceLogger().WithField("user_name", username)
+	logServ.Debug("Attempting to Login new user")
+
+	existedUser, _ := s.userRepo.Get(username)
 	if existedUser == nil {
+		logServ.Warn(ErrUserExists.Error())
 		return 0, ErrInvalidLogin
 	}
 
 	if !crypto.ComparePasswords(password, existedUser.Password) {
+		logServ.Warn(ErrInvalidLogin.Error())
 		return 0, ErrInvalidLogin
 	}
 
+	logServ.Debug("User Login successfully")
 	return existedUser.ID, nil
+}
+
+func serviceLogger() *logrus.Entry {
+	return logger.GetLogger().WithField("layer", "Service auth layer")
 }
