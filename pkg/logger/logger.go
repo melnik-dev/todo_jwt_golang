@@ -2,52 +2,48 @@ package logger
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"github.com/melnik-dev/go_todo_jwt/configs"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-)
 
-type Config struct {
-	Level      string
-	Format     string
-	Output     string
-	FilePath   string
-	CallerSkip int
-}
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
+)
 
 var (
 	globalLogger *logrus.Logger
 	initOnce     sync.Once
 )
 
-func NewLogger(cfg Config) (*logrus.Logger, error) {
+func InitLogger(cfg configs.ConfLog) error {
 	var err error
 	initOnce.Do(func() {
 		newLogger := logrus.New()
 
-		// 1. Уровень
+		// 1. Уровень логирования
 		level, parseErr := logrus.ParseLevel(cfg.Level)
 		if parseErr != nil {
-			newLogger.SetLevel(logrus.InfoLevel) // По умолчанию Info, если парсинг не удался
+			newLogger.SetLevel(logrus.InfoLevel)
 			newLogger.Warnf("Invalid log level '%s', defaulting to 'info'. Error: %v", cfg.Level, parseErr)
 		} else {
 			newLogger.SetLevel(level)
 		}
 
-		// 2. Формат
+		// 2. Формат логирования
 		switch strings.ToLower(cfg.Format) {
 		case "json":
 			newLogger.SetFormatter(&logrus.JSONFormatter{
-				TimestampFormat: "2006-01-02 15:04:05",
+				TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 				FieldMap: logrus.FieldMap{
 					logrus.FieldKeyTime:  "timestamp",
 					logrus.FieldKeyLevel: "level",
 					logrus.FieldKeyMsg:   "message",
-					logrus.FieldKeyFunc:  "caller", // Добавляем caller в JSON
+					logrus.FieldKeyFunc:  "caller",
+					logrus.FieldKeyFile:  "file",
 				},
 			})
 		default: // "text"
@@ -55,50 +51,85 @@ func NewLogger(cfg Config) (*logrus.Logger, error) {
 				FullTimestamp:   true,
 				TimestampFormat: "2006-01-02 15:04:05",
 				ForceColors:     true,
+				DisableQuote:    true,
 			})
 		}
 
-		// 3. Вывод
+		// 3. Вывод логирования
 		switch strings.ToLower(cfg.Output) {
 		case "file":
 			if cfg.FilePath == "" {
 				err = fmt.Errorf("log file path is required when output is 'file'")
 				return
 			}
-			dir := filepath.Dir(cfg.FilePath)
-			if err = os.MkdirAll(dir, 0755); err != nil {
-				err = fmt.Errorf("failed to create log directory %s: %w", dir, err)
+
+			lumberjackLogger, err := newLumberjack(cfg)
+			if err != nil {
 				return
 			}
-			file, openErr := os.OpenFile(cfg.FilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if openErr != nil {
-				err = fmt.Errorf("failed to open log file %s: %w", cfg.FilePath, openErr)
-				return
+
+			newLogger.SetOutput(lumberjackLogger)
+		case "both":
+			if cfg.FilePath != "" {
+				lumberjackLogger, err := newLumberjack(cfg)
+				if err != nil {
+					return
+				}
+
+				newLogger.SetOutput(io.MultiWriter(os.Stdout, lumberjackLogger))
+			} else {
+				newLogger.SetOutput(os.Stdout)
 			}
-			// файл нужно закрыть при завершении работы приложения
-			// defer file.Close() сработает при выходе из функции NewLogger
-			// Используем Lumberjack для ротации логов или сигнал
-			//lumberjackLogger := &lumberjack.Logger{
-			//	Filename:   cfg.FilePath,
-			//	MaxSize:    100, // MB
-			//	MaxBackups: 5,   // количество старых файлов
-			//	MaxAge:     30,   // дней
-			//	Compress:   true, // сжимать старые файлы
-			//}
-			newLogger.SetOutput(io.MultiWriter(os.Stdout, file)) // Логи и в консоль, и в файл
 		default:
 			newLogger.SetOutput(os.Stdout)
 		}
 
-		// 4. Отметка места вызова файл:строка
-		// true, чтобы видеть файл и номер строки, откуда был вызван лог
+		// 4. Отметка места вызова
 		newLogger.SetReportCaller(true)
-		// Пропускаем фреймы вызова, чтобы получить реальное место вызова в коде а не внутренности Logrus
-		newLogger.AddHook(&callerHook{skip: cfg.CallerSkip}) // Добавляем хук для корректного отображения caller
+		newLogger.AddHook(&callerHook{skip: cfg.CallerSkip})
 
 		globalLogger = newLogger
 	})
-	return globalLogger, err
+	return err
+}
+
+func newLumberjack(cfg configs.ConfLog) (*lumberjack.Logger, error) {
+	dir := filepath.Dir(cfg.FilePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		err = fmt.Errorf("failed to create log directory %s: %w", dir, err)
+		return nil, err
+	}
+
+	if err := checkFileWritable(cfg.FilePath); err != nil {
+		err = fmt.Errorf("log file %s is not writable: %w", cfg.FilePath, err)
+		return nil, err
+	}
+
+	if cfg.MaxSize == 0 {
+		cfg.MaxSize = 100
+	}
+	if cfg.MaxBackups == 0 {
+		cfg.MaxBackups = 5
+	}
+	if cfg.MaxAge == 0 {
+		cfg.MaxAge = 30
+	}
+
+	return &lumberjack.Logger{
+		Filename:   cfg.FilePath,
+		MaxSize:    cfg.MaxSize,
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAge,
+		Compress:   cfg.Compress,
+	}, nil
+}
+
+func checkFileWritable(filename string) error {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func GetLogger() *logrus.Logger {
@@ -118,7 +149,7 @@ func FromContext(c *gin.Context) *logrus.Entry {
 	return globalLogger.WithContext(c.Request.Context())
 }
 
-// callerHook - Hook, позволяет корректировать отчет о вызывающем объекте
+// callerHook - Hook для корректировки отчета о вызывающем объекте
 type callerHook struct {
 	skip int
 }
@@ -126,7 +157,6 @@ type callerHook struct {
 // Fire корректирует поле caller, чтобы оно указывало на реальное место вызова в коде
 func (hook *callerHook) Fire(entry *logrus.Entry) error {
 	if entry.HasCaller() {
-		// +3 - глубина вызовов Logrus/Hook
 		entry.Caller.File = fmt.Sprintf("%s:%d", filepath.Base(entry.Caller.File), entry.Caller.Line)
 	}
 	return nil

@@ -1,36 +1,62 @@
 package configs
 
 import (
-	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
-	"github.com/spf13/viper"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	HTTP struct {
-		Port         string        `mapstructure:"port"`
-		Host         string        `mapstructure:"host"`
-		ReadTimeout  time.Duration `mapstructure:"readTimeout"`
-		WriteTimeout time.Duration `mapstructure:"writeTimeout"`
-		IdleTimeout  time.Duration `mapstructure:"idleTimeout"`
-	} `mapstructure:"http"`
-	DB struct {
-		Host     string `mapstructure:"host"`
-		Port     string `mapstructure:"port"`
-		Username string `mapstructure:"username"`
-		DBName   string `mapstructure:"dbname"`
-		SSLMode  string `mapstructure:"sslmode"`
-		Password string `mapstructure:"password"` // не читаем из файла
-	} `mapstructure:"db"`
-	JWT struct {
-		Secret   string        `mapstructure:"secret"`
-		TokenTTL time.Duration `mapstructure:"tokenTTL"`
-	} `mapstructure:"jwt"`
-	Log logger.Config `mapstructure:"log"`
+	App  ConfApp  `mapstructure:"app"`
+	HTTP ConfHTTP `mapstructure:"http"`
+	DB   ConfDB   `mapstructure:"db"`
+	JWT  ConfJWT  `mapstructure:"jwt"`
+	Log  ConfLog  `mapstructure:"log"`
+}
+
+type ConfApp struct {
+	Name    string `mapstructure:"name"`
+	Env     string `mapstructure:"env"`
+	Version string `mapstructure:"version"`
+}
+
+type ConfHTTP struct {
+	Port         string        `mapstructure:"port"`
+	Host         string        `mapstructure:"host"`
+	ReadTimeout  time.Duration `mapstructure:"readTimeout"`
+	WriteTimeout time.Duration `mapstructure:"writeTimeout"`
+	IdleTimeout  time.Duration `mapstructure:"idleTimeout"`
+}
+
+type ConfDB struct {
+	Host     string `mapstructure:"host"`
+	Port     string `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	DBName   string `mapstructure:"dbname"`
+	SSLMode  string `mapstructure:"sslmode"`
+	Password string `mapstructure:"password"`
+}
+
+type ConfJWT struct {
+	Secret   string        `mapstructure:"secret"`
+	TokenTTL time.Duration `mapstructure:"tokenTTL"`
+}
+
+type ConfLog struct {
+	Level      string `mapstructure:"level"`
+	Format     string `mapstructure:"format"`
+	Output     string `mapstructure:"output"`
+	FilePath   string `mapstructure:"filepath"`
+	CallerSkip int    `mapstructure:"callerskip"`
+	// Настройки ротации логов
+	MaxSize    int  `mapstructure:"maxsize"`    // MB
+	MaxBackups int  `mapstructure:"maxbackups"` // количество файлов
+	MaxAge     int  `mapstructure:"maxage"`     // дни
+	Compress   bool `mapstructure:"compress"`   // сжатие
 }
 
 func LoadConfig() (*Config, error) {
@@ -46,39 +72,104 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config.yaml file: %w", err)
 	}
 
-	//viper.AutomaticEnv() // HTTP_PORT == http.port
-	//viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	if err := viper.BindEnv("http.host", "HTTP_HOST"); err != nil {
-		return nil, fmt.Errorf("failed binding HTTP_HOST: %w", err)
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	envBindings := map[string]string{
+		"app.name":     "APP_NAME",
+		"app.env":      "APP_ENV",
+		"app.version":  "APP_VERSION",
+		"http.host":    "HTTP_HOST",
+		"http.port":    "HTTP_PORT",
+		"db.host":      "DB_HOST",
+		"db.port":      "DB_PORT",
+		"db.username":  "DB_USERNAME",
+		"db.password":  "DB_PASSWORD",
+		"db.dbname":    "DB_NAME",
+		"db.sslmode":   "DB_SSLMODE",
+		"jwt.secret":   "JWT_SECRET",
+		"log.level":    "LOG_LEVEL",
+		"log.format":   "LOG_FORMAT",
+		"log.output":   "LOG_OUTPUT",
+		"log.filepath": "LOG_FILE_PATH",
 	}
-	if err := viper.BindEnv("db.host", "DB_HOST"); err != nil {
-		return nil, fmt.Errorf("failed binding DB_HOST: %w", err)
-	}
-	if err := viper.BindEnv("db.password", "DB_PASSWORD"); err != nil {
-		return nil, fmt.Errorf("failed binding DB_PASSWORD: %w", err)
-	}
-	if err := viper.BindEnv("jwt.secret", "JWT_SECRET"); err != nil {
-		return nil, fmt.Errorf("failed binding JWT_SECRET: %w", err)
+
+	for configKey, envKey := range envBindings {
+		if err := viper.BindEnv(configKey, envKey); err != nil {
+			return nil, fmt.Errorf("failed binding %s: %w", envKey, err)
+		}
 	}
 
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	fmt.Printf("Log config: %+v\n", cfg.Log)
-	if cfg.HTTP.Host == "" {
-		return nil, errors.New("HTTP_HOST environment variable not set")
+
+	if err := validateConfig(&cfg); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-	if cfg.DB.Host == "" {
-		return nil, errors.New("DB_HOST environment variable not set")
-	}
-	if cfg.DB.Password == "" {
-		return nil, errors.New("DB_PASSWORD environment variable not set")
-	}
-	if cfg.JWT.Secret == "" {
-		return nil, errors.New("JWT_SECRET environment variable not set")
-	}
-	cfg.JWT.TokenTTL = time.Hour
+
+	setDefaults(&cfg)
 
 	return &cfg, nil
+}
+
+func validateConfig(cfg *Config) error {
+	var errors []string
+
+	if cfg.HTTP.Host == "" {
+		errors = append(errors, "HTTP_HOST environment variable not set")
+	}
+	if cfg.HTTP.Port == "" {
+		errors = append(errors, "HTTP_PORT environment variable not set")
+	}
+
+	if cfg.DB.Host == "" {
+		errors = append(errors, "DB_HOST environment variable not set")
+	}
+	if cfg.DB.Port == "" {
+		errors = append(errors, "DB_PORT environment variable not set")
+	}
+	if cfg.DB.Username == "" {
+		errors = append(errors, "DB_USERNAME environment variable not set")
+	}
+	if cfg.DB.Password == "" {
+		errors = append(errors, "DB_PASSWORD environment variable not set")
+	}
+	if cfg.DB.DBName == "" {
+		errors = append(errors, "DB_NAME environment variable not set")
+	}
+
+	if cfg.JWT.Secret == "" {
+		errors = append(errors, "JWT_SECRET environment variable not set")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+func setDefaults(cfg *Config) {
+	if cfg.App.Name == "" {
+		cfg.App.Name = "todo_jwt"
+	}
+	if cfg.App.Env == "" {
+		cfg.App.Env = "development"
+	}
+
+	if cfg.JWT.TokenTTL == 0 {
+		cfg.JWT.TokenTTL = time.Hour
+	}
+
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = "info"
+	}
+	if cfg.Log.Format == "" {
+		cfg.Log.Format = "text"
+	}
+	if cfg.Log.Output == "" {
+		cfg.Log.Output = "stdout"
+	}
 }

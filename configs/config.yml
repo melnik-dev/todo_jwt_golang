@@ -1,9 +1,15 @@
+app:
+  name: "todo_jwt"
+  env: "development"
+  version: "1.0.0"
+
 http:
   port: "8080"
   readTimeout: "10s"
   writeTimeout: "10s"
   idleTimeout: "60s"
   host: "localhost"
+
 db:
   username: "postgres"
   host: "localhost"
@@ -11,18 +17,26 @@ db:
   dbname: "todo"
   sslmode: "disable"
   password: ""
+
 jwt:
   secret: ""
+  tokenTTL: "1h"
+
 log:
   # Уровень логирования: debug, info, warn, error, fatal, panic
   # Для продакшена обычно info или warn
   level: "debug"
   # Формат логирования: json (для Loki), text (для консоли)
   format: "text"
-  # Вывод логирования: stdout (для Promtail/Loki), file
+  # Вывод логирования: stdout, file, both
   output: "stdout"
-  # Путь к файлу логов, если output: "file" для stdout пустыой.
-  filePath: "" # "logs/app.log"
+  # Путь к файлу логов, если output: "file" или "both" (logs/app.log)
+  filepath: ""
   # Количество фреймов вызова для пропуска, чтобы Logrus показывал правильное место вызова
   # обычно 0, 1 или 2 если своя обертка над логгером
-  callerSkip: 0
+  callerskip: 0
+  # Настройки ротации логов (только для file/both)
+  maxsize: 100    # MB
+  maxbackups: 5   # количество файлов
+  maxage: 30      # дни
+  compress: true  # сжатие старых файлов
