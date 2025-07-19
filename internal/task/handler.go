@@ -13,18 +13,18 @@ import (
 )
 
 type HandlerDeps struct {
-	TaskService *Service
+	TaskService IService
 	*configs.Config
 }
 
 type Handler struct {
-	taskService *Service
+	TaskService IService
 	*configs.Config
 }
 
 func NewHandler(r *gin.Engine, deps *HandlerDeps) {
 	handler := &Handler{
-		taskService: deps.TaskService,
+		TaskService: deps.TaskService,
 		Config:      deps.Config,
 	}
 	task := r.Group("/task")
@@ -52,7 +52,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	taskId, err := h.taskService.Create(userID, input.Title, input.Description)
+	taskId, err := h.TaskService.Create(userID, input.Title, input.Description)
 	if err != nil {
 		logHandle.WithError(err).Error("Failed to Create")
 		response.InternalServerError(c, "Failed to create task")
@@ -87,7 +87,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	err := h.taskService.Update(userID, uri.ID, input.Title, input.Description, input.Completed)
+	err := h.TaskService.Update(userID, uri.ID, input.Title, input.Description, input.Completed)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
 			logHandle.Warn(ErrTaskNotFound.Error())
@@ -120,7 +120,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 	logHandle = logHandle.WithField("task_id", uri.ID)
 
-	err := h.taskService.Delete(userID, uri.ID)
+	err := h.TaskService.Delete(userID, uri.ID)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
 			logHandle.WithError(err).Warn(ErrTaskNotFound.Error())
@@ -153,7 +153,7 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 	logHandle = logHandle.WithField("task_id", uri.ID)
 
-	task, err := h.taskService.GetById(userID, uri.ID)
+	task, err := h.TaskService.GetById(userID, uri.ID)
 	if err != nil {
 		if errors.Is(err, ErrTaskNotFound) {
 			logHandle.WithError(err).Warn(ErrTaskNotFound.Error())
@@ -178,7 +178,7 @@ func (h *Handler) GetAll(c *gin.Context) {
 		return
 	}
 
-	tasks, err := h.taskService.GetAll(userID)
+	tasks, err := h.TaskService.GetAll(userID)
 	if err != nil {
 		logHandle.WithError(err).Error("Failed to get all tasks")
 		response.InternalServerError(c, "Failed to get tasks")

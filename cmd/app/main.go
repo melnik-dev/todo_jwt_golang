@@ -65,15 +65,15 @@ func main() {
 	route.GET("/ping", ping(mainLogger))
 
 	// Repositories
-	userRepo := user.NewRepository(pgDB)
-	taskRepo := task.NewRepository(pgDB)
+	userRepo := user.NewRepository(pgDB, mainLogger)
+	taskRepo := task.NewRepository(pgDB, mainLogger)
 
 	// Services
-	authService := auth.NewService(userRepo)
-	taskService := task.NewService(taskRepo)
+	authService := auth.NewService(userRepo, mainLogger)
+	taskService := task.NewService(taskRepo, mainLogger)
 
 	// Handlers
-	auth.NewHandler(route, auth.HandlerDeps{
+	auth.NewHandler(route, &auth.HandlerDeps{
 		AuthService: authService,
 		Config:      cfg,
 	})

@@ -2,20 +2,28 @@ package user
 
 import (
 	"github.com/melnik-dev/go_todo_jwt/pkg/db"
-	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 
-type Repository struct {
-	db *db.Db
+type IRepository interface {
+	Create(user *User) (*User, error)
+	Get(username string) (*User, error)
 }
 
-func NewRepository(db *db.Db) *Repository {
-	return &Repository{db: db}
+type Repository struct {
+	db     *db.Db
+	logger *logrus.Logger
+}
+
+func NewRepository(db *db.Db, logger *logrus.Logger) *Repository {
+	return &Repository{
+		db:     db,
+		logger: logger,
+	}
 }
 
 func (r *Repository) Create(user *User) (*User, error) {
-	userLogger := repositoryLogger()
+	userLogger := repositoryLogger(r.logger)
 	userLogger.Debug("Attempting to Create user")
 
 	var id int
@@ -26,13 +34,14 @@ func (r *Repository) Create(user *User) (*User, error) {
 		userLogger.WithError(err).Error("Failed to create user in database")
 		return user, err
 	}
+	user.ID = id
 
 	userLogger.WithField("user_id", user.ID).Debug("User Create successfully")
 	return user, nil
 }
 
 func (r *Repository) Get(username string) (*User, error) {
-	userLogger := repositoryLogger()
+	userLogger := repositoryLogger(r.logger)
 	userLogger.Debug("Attempting to Get user")
 
 	var user User
@@ -48,6 +57,6 @@ func (r *Repository) Get(username string) (*User, error) {
 	return &user, nil
 }
 
-func repositoryLogger() *logrus.Entry {
-	return logger.GetLogger().WithField("layer", "Repository user layer")
+func repositoryLogger(l *logrus.Logger) *logrus.Entry {
+	return l.WithField("layer", "Repository user layer")
 }

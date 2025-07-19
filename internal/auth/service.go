@@ -4,20 +4,28 @@ import (
 	"fmt"
 	"github.com/melnik-dev/go_todo_jwt/internal/user"
 	"github.com/melnik-dev/go_todo_jwt/pkg/crypto"
-	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 
-type Service struct {
-	userRepo *user.Repository
+type IService interface {
+	Register(username, password string) (int, error)
+	Login(username, password string) (int, error)
 }
 
-func NewService(repo *user.Repository) *Service {
-	return &Service{userRepo: repo}
+type Service struct {
+	userRepo user.IRepository
+	logger   *logrus.Logger
+}
+
+func NewService(repo user.IRepository, logger *logrus.Logger) *Service {
+	return &Service{
+		userRepo: repo,
+		logger:   logger,
+	}
 }
 
 func (s *Service) Register(username, password string) (int, error) {
-	logServ := serviceLogger().WithField("user_name", username)
+	logServ := serviceLogger(s.logger).WithField("user_name", username)
 	logServ.Debug("Attempting to Register new user")
 
 	existedUser, _ := s.userRepo.Get(username)
@@ -38,7 +46,7 @@ func (s *Service) Register(username, password string) (int, error) {
 	}
 	_, err = s.userRepo.Create(u)
 	if err != nil {
-		logServ.WithError(err).Error("failed to hash password")
+		logServ.WithError(err).Error("failed to Create")
 		return 0, err
 	}
 
@@ -47,12 +55,12 @@ func (s *Service) Register(username, password string) (int, error) {
 }
 
 func (s *Service) Login(username, password string) (int, error) {
-	logServ := serviceLogger().WithField("user_name", username)
+	logServ := serviceLogger(s.logger).WithField("user_name", username)
 	logServ.Debug("Attempting to Login new user")
 
-	existedUser, _ := s.userRepo.Get(username)
-	if existedUser == nil {
-		logServ.Warn(ErrUserExists.Error())
+	existedUser, err := s.userRepo.Get(username)
+	if err != nil {
+		logServ.WithError(err).Warn("failed to fetch user")
 		return 0, ErrInvalidLogin
 	}
 
@@ -65,6 +73,6 @@ func (s *Service) Login(username, password string) (int, error) {
 	return existedUser.ID, nil
 }
 
-func serviceLogger() *logrus.Entry {
-	return logger.GetLogger().WithField("layer", "Service auth layer")
+func serviceLogger(l *logrus.Logger) *logrus.Entry {
+	return l.WithField("layer", "Service auth layer")
 }

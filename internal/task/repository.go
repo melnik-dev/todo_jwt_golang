@@ -5,20 +5,31 @@ import (
 	"errors"
 	"github.com/melnik-dev/go_todo_jwt/internal/user"
 	"github.com/melnik-dev/go_todo_jwt/pkg/db"
-	"github.com/melnik-dev/go_todo_jwt/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 
-type Repository struct {
-	db *db.Db
+type IRepository interface {
+	Create(task *Task) (*Task, error)
+	Update(task *Task) error
+	DeleteById(task *Task) error
+	GetById(task *Task) (*Task, error)
+	GetAll(user *user.User) ([]Task, error)
 }
 
-func NewRepository(db *db.Db) *Repository {
-	return &Repository{db: db}
+type Repository struct {
+	db     *db.Db
+	logger *logrus.Logger
+}
+
+func NewRepository(db *db.Db, logger *logrus.Logger) *Repository {
+	return &Repository{
+		db:     db,
+		logger: logger,
+	}
 }
 
 func (r *Repository) Create(task *Task) (*Task, error) {
-	logRepo := repositoryLogger().WithFields(logrus.Fields{
+	logRepo := repositoryLogger(r.logger).WithFields(logrus.Fields{
 		"user_id": task.UserID,
 		"title":   task.Title,
 	})
@@ -41,7 +52,7 @@ func (r *Repository) Create(task *Task) (*Task, error) {
 }
 
 func (r *Repository) Update(task *Task) error {
-	logRepo := repositoryLogger().WithFields(logrus.Fields{
+	logRepo := repositoryLogger(r.logger).WithFields(logrus.Fields{
 		"user_id": task.UserID,
 		"task_id": task.ID,
 	})
@@ -73,7 +84,7 @@ func (r *Repository) Update(task *Task) error {
 }
 
 func (r *Repository) DeleteById(task *Task) error {
-	logRepo := repositoryLogger().WithFields(logrus.Fields{
+	logRepo := repositoryLogger(r.logger).WithFields(logrus.Fields{
 		"user_id": task.UserID,
 		"task_id": task.ID,
 	})
@@ -103,7 +114,7 @@ func (r *Repository) DeleteById(task *Task) error {
 }
 
 func (r *Repository) GetById(task *Task) (*Task, error) {
-	logRepo := repositoryLogger().WithFields(logrus.Fields{
+	logRepo := repositoryLogger(r.logger).WithFields(logrus.Fields{
 		"user_id": task.UserID,
 		"task_id": task.ID,
 	})
@@ -126,7 +137,7 @@ func (r *Repository) GetById(task *Task) (*Task, error) {
 }
 
 func (r *Repository) GetAll(user *user.User) ([]Task, error) {
-	logRepo := repositoryLogger().WithFields(logrus.Fields{
+	logRepo := repositoryLogger(r.logger).WithFields(logrus.Fields{
 		"user_id": user.ID,
 	})
 	logRepo.Debug("Attempting to GetAll")
@@ -144,6 +155,6 @@ func (r *Repository) GetAll(user *user.User) ([]Task, error) {
 	return tasks, err
 }
 
-func repositoryLogger() *logrus.Entry {
-	return logger.GetLogger().WithField("layer", "Repository task layer")
+func repositoryLogger(l *logrus.Logger) *logrus.Entry {
+	return l.WithField("layer", "Repository task layer")
 }

@@ -13,18 +13,18 @@ import (
 )
 
 type HandlerDeps struct {
-	AuthService *Service
+	AuthService IService
 	*configs.Config
 }
 
 type Handler struct {
-	authService *Service
+	AuthService IService
 	*configs.Config
 }
 
-func NewHandler(r *gin.Engine, deps HandlerDeps) {
+func NewHandler(r *gin.Engine, deps *HandlerDeps) {
 	handler := &Handler{
-		authService: deps.AuthService,
+		AuthService: deps.AuthService,
 		Config:      deps.Config,
 	}
 	auth := r.Group("/auth")
@@ -44,7 +44,7 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 	logHandle = logHandle.WithField("user_name", input.Name)
 
-	userId, err := h.authService.Register(input.Name, input.Password)
+	userId, err := h.AuthService.Register(input.Name, input.Password)
 	if err != nil {
 		if errors.Is(err, ErrUserExists) {
 			logHandle.Warn(ErrUserExists.Error())
@@ -83,10 +83,10 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	logHandle = logHandle.WithField("user_name", input.Name)
 
-	userId, err := h.authService.Login(input.Name, input.Password)
+	userId, err := h.AuthService.Login(input.Name, input.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidLogin) {
-			logHandle.Warn(ErrUserExists.Error())
+			logHandle.Warn(ErrInvalidLogin.Error())
 			response.Unauthorized(c, ErrInvalidLogin.Error())
 			return
 		}
